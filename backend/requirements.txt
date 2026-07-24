@@ -1,0 +1,12 @@
+fastapi>=0.110.0
+uvicorn>=0.28.0
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+requests>=2.31.0
+google-api-python-client>=2.120.0
+python-dotenv>=1.0.1
+sqlalchemy>=2.0.28
+redis>=5.0.3
+opentelemetry-api>=1.23.0
+opentelemetry-sdk>=1.23.0
+opentelemetry-exporter-otlp>=1.23.0
