@@ -1,0 +1,21 @@
+# Environment files
+.env
+.env.*
+
+# Node modules
+node_modules/
+
+# Python bytecode and virtual environments
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+venv/
+env/
+.venv/
+
+# Build and editor artifacts
+dist/
+build/
+.vscode/
+.idea/
