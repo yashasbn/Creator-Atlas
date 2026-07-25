@@ -5,21 +5,62 @@ receivers:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
+  # Docker JSON logs retain the structured JSON emitted by OTELJsonFormatter.
+  filelog:
+    include: [/var/lib/docker/containers/*/*-json.log]
+    start_at: end
+    include_file_path: true
+    operators:
+      - type: json_parser
+        parse_from: body
+        parse_to: attributes
+      - type: json_parser
+        parse_from: attributes.log
+        parse_to: attributes
 
 processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+  resource:
+    attributes:
+      - key: service.namespace
+        value: creator-atlas
+        action: upsert
   batch:
+    timeout: 5s
+    send_batch_size: 1024
 
 exporters:
-  logging:
-    loglevel: debug
+  otlp:
+    # SigNoz runs on native WSL Docker locally. Docker Desktop resolves this
+    # hostname to the Windows/WSL host where port 14317 is published.
+    endpoint: host.docker.internal:14317
+    tls:
+      insecure: true
+    sending_queue:
+      enabled: true
+      queue_size: 5000
+    retry_on_failure:
+      enabled: true
+      max_elapsed_time: 300s
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
 
 service:
+  extensions: [health_check]
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
-      exporters: [logging]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp]
     metrics:
       receivers: [otlp]
-      processors: [batch]
-      exporters: [logging]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp]
+    logs:
+      receivers: [otlp, filelog]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp]

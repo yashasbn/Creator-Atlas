@@ -1,47 +1,53 @@
-version: '3.8'
-
 services:
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
+    build: { context: ./backend, dockerfile: Dockerfile }
+    ports: ["8000:8000"]
     environment:
-      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - AI_PROVIDER=${AI_PROVIDER:-gemini}
-      - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql://atlas_user:atlas_pass@postgres:5432/creator_atlas
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      AI_PROVIDER: ${AI_PROVIDER:-gemini}
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql://atlas_user:atlas_pass@postgres:5432/creator_atlas
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      OTEL_SERVICE_NAME: creator-atlas-backend
+      ENVIRONMENT: ${ENVIRONMENT:-development}
     depends_on:
-      - redis
-      - postgres
+      redis: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      otel-collector: { condition: service_healthy }
+
+  # Current UI is Vite/React. A Next.js UI can use this exact OTLP/traceparent contract.
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+    volumes: ["./UI/youtube-frontend:/app"]
+    ports: ["5173:5173"]
+    depends_on: [backend]
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    ports: ["6379:6379"]
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 10s, timeout: 3s, retries: 5 }
 
   postgres:
     image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: atlas_user
-      POSTGRES_PASSWORD: atlas_pass
-      POSTGRES_DB: creator_atlas
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+    environment: { POSTGRES_USER: atlas_user, POSTGRES_PASSWORD: atlas_pass, POSTGRES_DB: creator_atlas }
+    ports: ["5432:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U atlas_user -d creator_atlas"], interval: 10s, timeout: 5s, retries: 5 }
 
+  # Collector forwards app telemetry to the SigNoz platform collector.
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
-    command: ["--config=/etc/otel-collector-config.yaml"]
+    image: otel/opentelemetry-collector-contrib:0.139.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
-      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
-    ports:
-      - "4317:4317" # OTLP gRPC receiver
-      - "4318:4318" # OTLP http receiver
+      - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    ports: ["4317:4317", "4318:4318", "13133:13133"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck: { test: ["CMD", "/otelcol-contrib", "--version"], interval: 30s, timeout: 5s, retries: 3 }
 
 volumes:
   postgres_data:
