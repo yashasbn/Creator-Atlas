@@ -188,7 +188,16 @@ function Search() {
 
           {/* Channel Header */}
           <div className="card channel-header">
-            <div className="channel-name">{ch.channel_title}</div>
+            <div className="channel-name">
+              <a 
+                href={ch.custom_url ? `https://youtube.com/${ch.custom_url}` : `https://youtube.com/channel/${ch.channel_id}`} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{ color: 'inherit', textDecoration: 'none' }}
+              >
+                {ch.channel_title} 🔗
+              </a>
+            </div>
             <div className="channel-meta">
               {ch.custom_url && <span>{ch.custom_url} &nbsp;·&nbsp;</span>}
               {ch.country ? `🌍 ${ch.country}` : '🌍 Global'}
@@ -369,7 +378,14 @@ function Search() {
               <div className="card-title">📹 Recent Uploads ({result.videos.length} videos)</div>
               <div className="video-list">
                 {result.videos.slice(0, 5).map((vid, idx) => (
-                  <div key={idx} className="video-row">
+                  <a 
+                    key={idx} 
+                    href={`https://youtube.com/watch?v=${vid.video_id}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="video-row"
+                    style={{ textDecoration: 'none', display: 'flex' }}
+                  >
                     <div>
                       <div className="video-title">{vid.title}</div>
                       <div className="video-date">{new Date(vid.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</div>
@@ -378,7 +394,7 @@ function Search() {
                       <div className="video-views">{formatNum(vid.view_count)} views</div>
                       <div className="video-likes-comments">👍 {formatNum(vid.like_count)} &nbsp;·&nbsp; 💬 {formatNum(vid.comment_count)}</div>
                     </div>
-                  </div>
+                  </a>
                 ))}
               </div>
             </div>
