@@ -26,7 +26,7 @@ function Search() {
     const requestId = 'req-' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/analyze', {
+      const response = await fetch('http://127.0.0.1:8081/analyze', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
