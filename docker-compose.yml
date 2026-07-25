@@ -8,13 +8,14 @@ services:
       AI_PROVIDER: ${AI_PROVIDER:-gemini}
       REDIS_URL: redis://redis:6379/0
       DATABASE_URL: postgresql://atlas_user:atlas_pass@postgres:5432/creator_atlas
-      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
-      OTEL_SERVICE_NAME: creator-atlas-backend
       ENVIRONMENT: ${ENVIRONMENT:-development}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: creator-atlas-backend
     depends_on:
       redis: { condition: service_healthy }
       postgres: { condition: service_healthy }
-      otel-collector: { condition: service_healthy }
+    networks:
+      - default
 
   # Current UI is Vite/React. A Next.js UI can use this exact OTLP/traceparent contract.
   frontend:
@@ -37,18 +38,25 @@ services:
     volumes: ["postgres_data:/var/lib/postgresql/data"]
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U atlas_user -d creator_atlas"], interval: 10s, timeout: 5s, retries: 5 }
 
-  # Collector forwards app telemetry to the SigNoz platform collector.
+  # OTel Collector - receives telemetry from app and forwards to SigNoz
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.139.0
-    user: "0:0"
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
       - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-    ports: ["4317:4317", "4318:4318", "13133:13133"]
+    ports:
+      - "4317:4317"  # OTLP gRPC receiver
+      - "4318:4318"  # OTLP HTTP receiver
+      - "13133:13133" # Health check
+    environment:
+      - SIGNOZ_ENDPOINT=${SIGNOZ_ENDPOINT:-localhost:4317}
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    healthcheck: { test: ["CMD", "/otelcol-contrib", "--version"], interval: 30s, timeout: 5s, retries: 3 }
+    networks:
+      - default
+
+networks:
+  default:
 
 volumes:
   postgres_data:
