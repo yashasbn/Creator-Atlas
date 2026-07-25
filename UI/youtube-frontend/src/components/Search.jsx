@@ -22,14 +22,23 @@ function Search() {
     setError('')
     setResult(null)
 
+    // Generate a simple request ID for distributed tracing (SigNoz)
+    const requestId = 'req-' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
+
     try {
-      const response = await fetch('http://127.0.0.1:8002/analyze', {
+      const response = await fetch('http://127.0.0.1:8000/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Request-ID': requestId
+        },
         body: JSON.stringify({ channel: channelName.trim() }),
       })
 
       const data = await response.json()
+      // Capture the Request ID returned by the backend for telemetry correlation
+      data._request_id = response.headers.get('X-Request-ID') || requestId
+
       if (!response.ok) {
         throw new Error(data.detail || 'Analysis failed')
       }
@@ -67,8 +76,13 @@ function Search() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '20px' }}>
           
           {/* Header Card */}
-          <div className="result-card" style={{ background: '#1e293b', color: '#f8fafc', borderRadius: '16px', padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="result-card" style={{ background: '#1e293b', color: '#f8fafc', borderRadius: '16px', padding: '24px', position: 'relative' }}>
+            {result._request_id && (
+              <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '0.75rem', color: '#64748b', background: '#0f172a', padding: '4px 8px', borderRadius: '6px' }}>
+                Trace ID: {result._request_id}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', marginTop: '8px' }}>
               <div>
                 <h2 style={{ fontSize: '1.8rem', margin: 0, color: '#38bdf8' }}>{ch.channel_title}</h2>
                 <p style={{ margin: '4px 0 0', color: '#94a3b8' }}>{ch.custom_url || 'YouTube Channel'} • Country: {ch.country || 'Global'}</p>
