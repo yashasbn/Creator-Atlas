@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     OTEL_EXPORTER_OTLP_ENDPOINT: str = "localhost:4317"
     OTEL_EXPORTER_OTLP_INSECURE: bool = True
     OTEL_SERVICE_NAME: str = "creator-atlas-backend"
+    REMOTE_SIGNOZ_ENDPOINT: str = ""
 
     class Config:
         env_file = ".env"

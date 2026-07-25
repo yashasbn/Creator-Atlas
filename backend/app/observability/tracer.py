@@ -87,14 +87,10 @@ def configure_observability(sqlalchemy_engine=None) -> None:
             "deployment.environment": settings.ENVIRONMENT,
         })
         provider = TracerProvider(resource=resource)
-        provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
-            endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT, insecure=settings.OTEL_EXPORTER_OTLP_INSECURE
-        )))
+        provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
         trace.set_tracer_provider(provider)
 
-        reader = PeriodicExportingMetricReader(OTLPMetricExporter(
-            endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT, insecure=settings.OTEL_EXPORTER_OTLP_INSECURE
-        ), export_interval_millis=15000)
+        reader = PeriodicExportingMetricReader(OTLPMetricExporter(), export_interval_millis=15000)
         metrics.set_meter_provider(MeterProvider(resource=resource, metric_readers=[reader]))
 
     # Framework/library spans use OTel semantic conventions and W3C trace context.

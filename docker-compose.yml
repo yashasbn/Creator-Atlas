@@ -44,12 +44,12 @@ services:
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
       - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
-    ports:
-      - "4317:4317"  # OTLP gRPC receiver
-      - "4318:4318"  # OTLP HTTP receiver
-      - "13133:13133" # Health check
+    # ports:
+    #   - "4317:4317"  # OTLP gRPC receiver
+    #   - "4318:4318"  # OTLP HTTP receiver
+    #   - "13133:13133" # Health check
     environment:
-      - SIGNOZ_ENDPOINT=${SIGNOZ_ENDPOINT:-localhost:4317}
+      - SIGNOZ_ENDPOINT=${SIGNOZ_ENDPOINT:-host.docker.internal:4317}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
