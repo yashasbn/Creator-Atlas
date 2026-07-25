@@ -32,6 +32,12 @@ async def observability_middleware(request: Request, call_next):
         response = await call_next(request)
         status_code = response.status_code
         response.headers["X-Request-ID"] = request_id
+        from opentelemetry import trace
+        span_context = trace.get_current_span().get_span_context()
+        if span_context.is_valid:
+            trace_id = f"{span_context.trace_id:032x}"
+            response.headers["X-Trace-ID"] = trace_id
+            response.headers["Access-Control-Expose-Headers"] = "X-Request-ID, X-Trace-ID"
         return response
     except Exception as error:
         status_code = 500
