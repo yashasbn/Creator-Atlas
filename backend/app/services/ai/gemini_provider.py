@@ -2,13 +2,16 @@ import time
 import os
 import json
 import requests
+from opentelemetry.trace import Status, StatusCode
 from typing import Dict, List, Any
 from app.services.ai.base import BaseAIProvider, AIReportSchema
 from app.observability.tracer import (
     tracer, 
     llm_requests_total, 
     llm_failures_total, 
-    llm_latency_histogram, 
+    llm_latency,
+    elapsed_ms,
+    mark_error,
     otel_logger
 )
 
@@ -17,7 +20,7 @@ class GeminiProvider(BaseAIProvider):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("YOUTUBE_API_KEY")
 
     async def generate_report(self, metadata: Dict[str, Any], analytics: Dict[str, Any], videos: List[Dict[str, Any]]) -> AIReportSchema:
-        start_time = time.time()
+        start_time = time.perf_counter()
         provider_name = "gemini"
         llm_requests_total.add(1, {"provider": provider_name})
 
@@ -52,9 +55,9 @@ Generate an exhaustive, highly insightful Creator Intelligence Report in pure JS
 }}
 Return ONLY valid JSON. No markdown code blocks, no preamble.
 """
-        with tracer.start_as_current_span("gemini_llm_request") as span:
-            span.set_attribute("ai.provider", provider_name)
-            span.set_attribute("ai.model", "gemini-1.5-flash")
+        with tracer.start_as_current_span("llm.gemini.generate") as span:
+            span.set_attribute("gen_ai.provider.name", provider_name)
+            span.set_attribute("gen_ai.request.model", "gemini-1.5-flash")
 
             if not self.api_key:
                 otel_logger.warn("Missing Gemini API Key, triggering fallback report", extra={"provider": provider_name})
@@ -66,9 +69,9 @@ Return ONLY valid JSON. No markdown code blocks, no preamble.
                 payload = {"contents": [{"parts": [{"text": prompt}]}]}
                 
                 res = requests.post(url, headers=headers, json=payload, timeout=20)
-                duration = time.time() - start_time
-                llm_latency_histogram.record(duration, {"provider": provider_name})
-                span.set_attribute("ai.latency_seconds", duration)
+                duration = elapsed_ms(start_time)
+                llm_latency.record(duration, {"provider": provider_name, "outcome": "success" if res.ok else "error"})
+                span.set_attribute("gen_ai.response.duration_ms", duration)
 
                 if res.ok:
                     data = res.json()
@@ -78,17 +81,18 @@ Return ONLY valid JSON. No markdown code blocks, no preamble.
                     elif text.startswith("```"):
                         text = text[3:-3].strip()
                     parsed = json.loads(text)
-                    otel_logger.info("Successfully generated Gemini AI report", extra={"execution_time": duration, "provider": provider_name})
+                    otel_logger.info("Successfully generated Gemini AI report", extra={"execution_time_ms": round(duration, 2), "provider": provider_name})
                     return AIReportSchema(**parsed)
                 else:
-                    llm_failures_total.add(1, {"provider": provider_name, "error": f"http_{res.status_code}"})
-                    span.set_attribute("error", True)
+                    llm_failures_total.add(1, {"provider": provider_name, "error.type": f"http_{res.status_code}"})
+                    span.set_status(Status(StatusCode.ERROR, f"HTTP {res.status_code}"))
                     otel_logger.error(f"Gemini API returned status {res.status_code}", extra={"provider": provider_name, "error_details": res.text})
             except Exception as e:
-                duration = time.time() - start_time
-                llm_failures_total.add(1, {"provider": provider_name, "error": str(e)})
-                span.record_exception(e)
-                otel_logger.error(f"Gemini LLM Exception: {e}", extra={"execution_time": duration, "provider": provider_name, "error_details": str(e)})
+                duration = elapsed_ms(start_time)
+                llm_failures_total.add(1, {"provider": provider_name, "error.type": type(e).__name__})
+                llm_latency.record(duration, {"provider": provider_name, "outcome": "error"})
+                mark_error(span, e)
+                otel_logger.exception("Gemini LLM request failed", extra={"execution_time_ms": round(duration, 2), "provider": provider_name, "error_details": str(e)})
 
         return self._fallback_report(metadata, analytics)
 

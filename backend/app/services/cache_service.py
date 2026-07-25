@@ -4,9 +4,10 @@ from typing import Optional, Dict, Any
 from app.config import settings
 from app.observability.tracer import (
     tracer, 
-    cache_hits_counter, 
-    cache_misses_counter, 
-    cache_latency_histogram,
+    cache_operations_total,
+    cache_latency,
+    elapsed_ms,
+    mark_error,
     otel_logger
 )
 
@@ -23,13 +24,12 @@ _memory_cache: Dict[str, Dict[str, Any]] = {}
 class CacheService:
     @staticmethod
     def get(key: str) -> Optional[Dict[str, Any]]:
-        start_time = time.time()
+        start_time = time.perf_counter()
         formatted_key = f"creator_atlas:{key.lower().strip()}"
         result = None
 
-        with tracer.start_as_current_span("redis_cache_lookup") as span:
-            span.set_attribute("cache.key", formatted_key)
-            span.set_attribute("cache.type", "redis" if _redis_available else "memory")
+        with tracer.start_as_current_span("cache.get") as span:
+            span.set_attribute("cache.system", "redis" if _redis_available else "memory")
 
             if _redis_available and _redis_client:
                 try:
@@ -37,7 +37,7 @@ class CacheService:
                     if data:
                         result = json.loads(data)
                 except Exception as e:
-                    span.record_exception(e)
+                    mark_error(span, e)
                     otel_logger.error(f"Redis cache query error: {e}", extra={"error_details": str(e)})
 
             if result is None and formatted_key in _memory_cache:
@@ -45,17 +45,18 @@ class CacheService:
                 if entry["expiry"] > time.time():
                     result = entry["data"]
 
-            duration = time.time() - start_time
-            cache_latency_histogram.record(duration, {"cache.type": "redis" if _redis_available else "memory"})
+            duration = elapsed_ms(start_time)
+            metric_attributes = {"cache.system": "redis" if _redis_available else "memory", "cache.operation": "get"}
+            cache_latency.record(duration, metric_attributes)
 
             if result:
-                cache_hits_counter.add(1, {"cache.key": formatted_key})
+                cache_operations_total.add(1, {**metric_attributes, "cache.result": "hit"})
                 span.set_attribute("cache.hit", True)
-                otel_logger.info(f"Cache HIT for key: {formatted_key}", extra={"execution_time": duration, "channel": key})
+                otel_logger.info("Cache hit", extra={"execution_time_ms": round(duration, 2), "channel": key})
             else:
-                cache_misses_counter.add(1, {"cache.key": formatted_key})
+                cache_operations_total.add(1, {**metric_attributes, "cache.result": "miss"})
                 span.set_attribute("cache.hit", False)
-                otel_logger.info(f"Cache MISS for key: {formatted_key}", extra={"execution_time": duration, "channel": key})
+                otel_logger.info("Cache miss", extra={"execution_time_ms": round(duration, 2), "channel": key})
 
         return result
 
@@ -65,8 +66,8 @@ class CacheService:
         formatted_key = f"creator_atlas:{key.lower().strip()}"
         json_str = json.dumps(value)
 
-        with tracer.start_as_current_span("redis_cache_store") as span:
-            span.set_attribute("cache.key", formatted_key)
+        with tracer.start_as_current_span("cache.set") as span:
+            span.set_attribute("cache.system", "redis" if _redis_available else "memory")
             span.set_attribute("cache.ttl", ttl)
 
             if _redis_available and _redis_client:
@@ -74,7 +75,7 @@ class CacheService:
                     _redis_client.setex(formatted_key, ttl, json_str)
                     return
                 except Exception as e:
-                    span.record_exception(e)
+                    mark_error(span, e)
 
             _memory_cache[formatted_key] = {
                 "data": value,

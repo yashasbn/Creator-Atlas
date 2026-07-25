@@ -1,9 +1,20 @@
 from datetime import datetime, timezone
 from typing import List, Dict, Any
+import time
+from app.observability.tracer import analytics_duration, elapsed_ms, tracer
 
 class AnalyticsEngine:
     @staticmethod
     def analyze(channel_data: Dict[str, Any], videos: List[Dict[str, Any]]) -> Dict[str, Any]:
+        started = time.perf_counter()
+        with tracer.start_as_current_span("analytics.process") as span:
+            span.set_attribute("analytics.video_count", len(videos))
+            result = AnalyticsEngine._analyze(channel_data, videos)
+            analytics_duration.record(elapsed_ms(started), {"analytics.result": "success"})
+            return result
+
+    @staticmethod
+    def _analyze(channel_data: Dict[str, Any], videos: List[Dict[str, Any]]) -> Dict[str, Any]:
         if not videos:
             return {
                 "avg_views_per_video": 0,
