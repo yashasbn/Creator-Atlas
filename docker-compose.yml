@@ -1,7 +1,7 @@
 services:
   backend:
     build: { context: ./backend, dockerfile: Dockerfile }
-    ports: ["8000:8000"]
+    ports: ["8081:8000"]
     environment:
       YOUTUBE_API_KEY: ${YOUTUBE_API_KEY}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
@@ -40,6 +40,7 @@ services:
   # Collector forwards app telemetry to the SigNoz platform collector.
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.139.0
+    user: "0:0"
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
       - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
