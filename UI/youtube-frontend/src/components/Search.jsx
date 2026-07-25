@@ -51,6 +51,84 @@ function Search() {
     }
   }
 
+  const getSigNozLogsUrl = (requestId) => {
+    const compositeQuery = {
+      queryType: 'builder',
+      builder: {
+        queryData: [
+          {
+            dataSource: 'logs',
+            queryName: 'A',
+            aggregateOperator: 'noop',
+            aggregateAttribute: {
+              id: '------false',
+              dataType: '',
+              key: '',
+              isColumn: false,
+              type: '',
+              isJSON: false
+            },
+            timeAggregation: 'rate',
+            spaceAggregation: 'sum',
+            functions: [],
+            filters: {
+              items: [
+                {
+                  id: '2e14d517',
+                  key: {
+                    key: 'body',
+                    dataType: 'string',
+                    type: '',
+                    isColumn: true,
+                    isJSON: false,
+                    id: 'body--string----true'
+                  },
+                  op: 'contains',
+                  value: requestId
+                }
+              ],
+              op: 'AND'
+            },
+            expression: 'A',
+            disabled: false,
+            having: [],
+            stepInterval: 60,
+            limit: null,
+            orderBy: [
+              {
+                columnName: 'timestamp',
+                order: 'desc'
+              }
+            ],
+            groupBy: [],
+            legend: '',
+            reduceTo: 'avg'
+          }
+        ],
+        queryFormulas: []
+      },
+      promql: [
+        {
+          name: 'A',
+          query: '',
+          legend: '',
+          disabled: false
+        }
+      ],
+      clickhouse_sql: [
+        {
+          name: 'A',
+          legend: '',
+          disabled: false,
+          query: ''
+        }
+      ],
+      id: '14284e83-d3de-424e-8602-9a6964c71a1c'
+    };
+    const encoded = encodeURIComponent(JSON.stringify(compositeQuery));
+    return `http://localhost:3301/logs/logs-explorer?options=%7B%22selectColumns%22%3A%5B%5D%2C%22maxLines%22%3A2%2C%22format%22%3A%22list%22%7D&compositeQuery=${encoded}&relativeTime=30m`;
+  };
+
   const ch = result?.channel || {}
   const an = result?.analytics || {}
   const ai = result?.ai_report || {}
@@ -164,8 +242,38 @@ function Search() {
                 </div>
               )}
               {result._request_id && (
-                <div className="trace-badge">
-                  🆔 Request ID: {result._request_id}
+                <div className="trace-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  🆔 SigNoz Logs: 
+                  <a 
+                    href={getSigNozLogsUrl(result._request_id)}
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    style={{ color: '#06b6d4', textDecoration: 'underline', fontWeight: 600 }}
+                  >
+                    {result._request_id.substring(0, 12)}...
+                  </a>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(result._request_id);
+                      const btn = document.getElementById('copy-req-btn');
+                      if (btn) {
+                        btn.innerText = 'Copied!';
+                        setTimeout(() => { btn.innerText = 'Copy'; }, 2000);
+                      }
+                    }}
+                    id="copy-req-btn"
+                    style={{ 
+                      background: 'rgba(255,255,255,0.1)', 
+                      border: 'none', 
+                      color: 'white', 
+                      padding: '2px 6px', 
+                      borderRadius: '4px', 
+                      cursor: 'pointer',
+                      fontSize: '0.65rem'
+                    }}
+                  >
+                    Copy
+                  </button>
                 </div>
               )}
             </div>
