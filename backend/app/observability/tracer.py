@@ -11,8 +11,8 @@ from contextvars import ContextVar
 from typing import Any, Mapping, Optional
 
 from opentelemetry import metrics, trace
-from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_VERSION, Resource
@@ -72,21 +72,30 @@ def configure_observability(sqlalchemy_engine=None) -> None:
     if _configured:
         return
 
-    resource = Resource.create({
-        SERVICE_NAME: settings.OTEL_SERVICE_NAME,
-        SERVICE_VERSION: settings.SERVICE_VERSION,
-        "deployment.environment": settings.ENVIRONMENT,
-    })
-    provider = TracerProvider(resource=resource)
-    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
-        endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT, insecure=settings.OTEL_EXPORTER_OTLP_INSECURE
-    )))
-    trace.set_tracer_provider(provider)
+    # Use custom exporter if remote SigNoz endpoint is configured
+    if settings.REMOTE_SIGNOZ_ENDPOINT:
+        from app.observability.custom_exporter import configure_custom_exporter
+        configure_custom_exporter(
+            remote_signoz_endpoint=settings.REMOTE_SIGNOZ_ENDPOINT,
+            insecure=settings.OTEL_EXPORTER_OTLP_INSECURE
+        )
+    else:
+        # Use standard local exporter
+        resource = Resource.create({
+            SERVICE_NAME: settings.OTEL_SERVICE_NAME,
+            SERVICE_VERSION: settings.SERVICE_VERSION,
+            "deployment.environment": settings.ENVIRONMENT,
+        })
+        provider = TracerProvider(resource=resource)
+        provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
+            endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT, insecure=settings.OTEL_EXPORTER_OTLP_INSECURE
+        )))
+        trace.set_tracer_provider(provider)
 
-    reader = PeriodicExportingMetricReader(OTLPMetricExporter(
-        endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT, insecure=settings.OTEL_EXPORTER_OTLP_INSECURE
-    ), export_interval_millis=15000)
-    metrics.set_meter_provider(MeterProvider(resource=resource, metric_readers=[reader]))
+        reader = PeriodicExportingMetricReader(OTLPMetricExporter(
+            endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT, insecure=settings.OTEL_EXPORTER_OTLP_INSECURE
+        ), export_interval_millis=15000)
+        metrics.set_meter_provider(MeterProvider(resource=resource, metric_readers=[reader]))
 
     # Framework/library spans use OTel semantic conventions and W3C trace context.
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
