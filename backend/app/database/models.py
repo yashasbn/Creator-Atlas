@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Float, DateTime, JSON, ForeignKey, Text
+from sqlalchemy import Column, String, Integer, Float, DateTime, JSON, ForeignKey, Text, BigInteger
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -13,8 +13,8 @@ class ChannelModel(Base):
     custom_url = Column(String, index=True, nullable=True)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
-    subscriber_count = Column(Integer, default=0)
-    view_count = Column(Integer, default=0)
+    subscriber_count = Column(BigInteger, default=0)
+    view_count = Column(BigInteger, default=0)
     video_count = Column(Integer, default=0)
     country = Column(String, nullable=True)
     published_at = Column(String, nullable=True)
