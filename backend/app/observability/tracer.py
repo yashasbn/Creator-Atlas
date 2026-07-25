@@ -97,8 +97,29 @@ def configure_observability(sqlalchemy_engine=None) -> None:
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
     from opentelemetry.instrumentation.redis import RedisInstrumentor
     from opentelemetry.instrumentation.requests import RequestsInstrumentor
+    def scrub_api_keys(span, request_obj):
+        if not span or not request_obj:
+            return
+        url = getattr(request_obj, "url", None)
+        if not url:
+            return
+        if "key=" in url:
+            import urllib.parse
+            try:
+                parsed = urllib.parse.urlparse(url)
+                q = urllib.parse.parse_qs(parsed.query)
+                if "key" in q:
+                    q["key"] = ["REDACTED"]
+                new_query = urllib.parse.urlencode(q, doseq=True)
+                scrubbed_url = urllib.parse.urlunparse(
+                    (parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment)
+                )
+                span.set_attribute("http.url", scrubbed_url)
+            except Exception:
+                pass
+
     from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-    RequestsInstrumentor().instrument()
+    RequestsInstrumentor().instrument(request_hook=scrub_api_keys)
     RedisInstrumentor().instrument()
     if sqlalchemy_engine is not None:
         SQLAlchemyInstrumentor().instrument(engine=sqlalchemy_engine)
