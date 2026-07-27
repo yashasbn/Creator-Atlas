@@ -12,10 +12,16 @@ from app.database.session import get_db
 from app.database.models import ChannelModel, AnalysisReportModel
 from app.observability.tracer import (
     tracer, 
-    response_generation_duration,
     elapsed_ms,
     mark_error,
     otel_logger
+)
+from app.observability.prometheus_metrics import (
+    cache_operations_total, cache_duration,
+    youtube_api_requests_total, youtube_api_duration, youtube_api_failures,
+    analytics_duration, llm_requests_total, llm_duration, llm_failures_total,
+    database_operations_total, database_duration,
+    channel_analyses_total, channel_analysis_duration, response_generation_duration
 )
 from app.config import settings
 
@@ -45,7 +51,11 @@ async def analyze_creator(req: SearchRequest, request: Request, db: Session = De
         span.set_attribute("ai.provider", settings.AI_PROVIDER)
 
         # 1. Redis Cache Lookup Span
+        cache_start = time.perf_counter()
         cached_data = CacheService.get(channel_query)
+        cache_duration.labels(operation="get").observe(elapsed_ms(cache_start) / 1000)
+        cache_operations_total.labels(operation="get", status="hit" if cached_data else "miss").inc()
+        
         if cached_data:
             duration = elapsed_ms(start_time)
             otel_logger.info(f"Successfully processed /analyze via Cache Hit", extra={
@@ -57,6 +67,7 @@ async def analyze_creator(req: SearchRequest, request: Request, db: Session = De
             return cached_data
 
         # 2. YouTube API Fetch Span
+        yt_start = time.perf_counter()
         with tracer.start_as_current_span("youtube.fetch_channel") as yt_span:
             yt_span.set_attribute("channel.query", channel_query)
             try:
@@ -64,21 +75,34 @@ async def analyze_creator(req: SearchRequest, request: Request, db: Session = De
                 channel_id = yt.resolve_channel_id(channel_query)
                 channel_details = yt.get_channel_details(channel_id)
                 videos = yt.get_recent_videos(channel_details.get("uploads_playlist_id"), max_results=20)
+                youtube_api_requests_total.labels(operation="fetch_channel").inc()
+                youtube_api_duration.labels(operation="fetch_channel").observe(elapsed_ms(yt_start) / 1000)
             except ValueError as ve:
                 mark_error(yt_span, ve)
+                youtube_api_failures.labels(operation="fetch_channel", error_type="value_error").inc()
                 raise HTTPException(status_code=404, detail=str(ve))
             except Exception as e:
                 mark_error(yt_span, e)
+                youtube_api_failures.labels(operation="fetch_channel", error_type="api_error").inc()
                 raise HTTPException(status_code=502, detail=f"YouTube API Error: {str(e)}")
 
         # 3. Analytics Engine Span
+        analytics_start = time.perf_counter()
         analytics_results = AnalyticsEngine.analyze(channel_details, videos)
+        analytics_duration.observe(elapsed_ms(analytics_start) / 1000)
 
         # 4. Provider-Agnostic AI Report Generation Span
+        llm_start = time.perf_counter()
         with tracer.start_as_current_span("response.generate"):
             ai_provider = AIService.get_provider()
-            ai_report = await ai_provider.generate_report(channel_details, analytics_results, videos)
-            ai_report_dict = ai_report.model_dump()
+            llm_requests_total.labels(provider=settings.AI_PROVIDER).inc()
+            try:
+                ai_report = await ai_provider.generate_report(channel_details, analytics_results, videos)
+                ai_report_dict = ai_report.model_dump()
+                llm_duration.labels(provider=settings.AI_PROVIDER).observe(elapsed_ms(llm_start) / 1000)
+            except Exception as e:
+                llm_failures_total.labels(provider=settings.AI_PROVIDER, error_type="generation_error").inc()
+                raise
 
         response_payload = {
             "channel": channel_details,
@@ -88,6 +112,7 @@ async def analyze_creator(req: SearchRequest, request: Request, db: Session = De
         }
 
         # 5. Database Persistence Span & Metric Tracking
+        db_start = time.perf_counter()
         with tracer.start_as_current_span("database.persist_analysis") as db_span:
             try:
                 db_channel = db.query(ChannelModel).filter_by(channel_id=channel_id).first()
@@ -106,6 +131,7 @@ async def analyze_creator(req: SearchRequest, request: Request, db: Session = De
                     db.add(db_channel)
                     db.commit()
                     db.refresh(db_channel)
+                    database_operations_total.labels(operation="create", table="channels").inc()
 
                 db_report = AnalysisReportModel(
                     channel_db_id=db_channel.id,
@@ -127,17 +153,27 @@ async def analyze_creator(req: SearchRequest, request: Request, db: Session = De
                 )
                 db.add(db_report)
                 db.commit()
+                database_operations_total.labels(operation="create", table="analysis_reports").inc()
+                database_duration.labels(operation="persist_analysis", table="analysis_reports").observe(elapsed_ms(db_start) / 1000)
             except Exception as dbe:
                 mark_error(db_span, dbe)
+                database_operations_total.labels(operation="create", table="analysis_reports", error_type="db_error").inc()
                 otel_logger.error(f"Database save error: {dbe}", extra={"error_details": str(dbe)})
 
         # 6. Store in Redis Cache
+        cache_set_start = time.perf_counter()
         CacheService.set(channel_query, response_payload)
+        cache_duration.labels(operation="set").observe(elapsed_ms(cache_set_start) / 1000)
+        cache_operations_total.labels(operation="set", status="success").inc()
+        
         if channel_details.get("custom_url"):
             CacheService.set(channel_details["custom_url"], response_payload)
+            cache_operations_total.labels(operation="set", status="success").inc()
 
         total_duration = elapsed_ms(start_time)
-        response_generation_duration.record(total_duration, {"response.type": "creator_analysis"})
+        channel_analyses_total.labels(ai_provider=settings.AI_PROVIDER).inc()
+        channel_analysis_duration.labels(ai_provider=settings.AI_PROVIDER).observe(total_duration / 1000)
+        response_generation_duration.labels(response_type="creator_analysis").observe(total_duration / 1000)
         
         otel_logger.info(f"Successfully processed /analyze via API & AI Execution", extra={
             "request_id": request_id,
