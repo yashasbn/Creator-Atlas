@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 from typing import List, Dict, Any
 import time
-from app.observability.tracer import analytics_duration, elapsed_ms, tracer
+from app.observability.tracer import elapsed_ms, tracer
+from app.observability.prometheus_metrics import analytics_duration
 
 class AnalyticsEngine:
     @staticmethod
@@ -10,7 +11,7 @@ class AnalyticsEngine:
         with tracer.start_as_current_span("analytics.process") as span:
             span.set_attribute("analytics.video_count", len(videos))
             result = AnalyticsEngine._analyze(channel_data, videos)
-            analytics_duration.record(elapsed_ms(started), {"analytics.result": "success"})
+            analytics_duration.observe(elapsed_ms(started) / 1000)
             return result
 
     @staticmethod

@@ -7,13 +7,11 @@ from typing import Dict, List, Any
 from app.services.ai.base import BaseAIProvider, AIReportSchema
 from app.observability.tracer import (
     tracer, 
-    llm_requests_total, 
-    llm_failures_total, 
-    llm_latency,
     elapsed_ms,
     mark_error,
     otel_logger
 )
+from app.observability.prometheus_metrics import llm_requests_total, llm_failures_total, llm_duration
 
 class GeminiProvider(BaseAIProvider):
     def __init__(self, api_key: str = None):
@@ -22,7 +20,7 @@ class GeminiProvider(BaseAIProvider):
     async def generate_report(self, metadata: Dict[str, Any], analytics: Dict[str, Any], videos: List[Dict[str, Any]]) -> AIReportSchema:
         start_time = time.perf_counter()
         provider_name = "gemini"
-        llm_requests_total.add(1, {"provider": provider_name})
+        llm_requests_total.labels(provider=provider_name).inc()
 
         prompt = f"""
 You are a senior YouTube Creator Intelligence Analyst. Analyze the following creator channel using ONLY the provided public metadata.
@@ -70,7 +68,7 @@ Return ONLY valid JSON. No markdown code blocks, no preamble.
                 
                 res = requests.post(url, headers=headers, json=payload, timeout=20)
                 duration = elapsed_ms(start_time)
-                llm_latency.record(duration, {"provider": provider_name, "outcome": "success" if res.ok else "error"})
+                llm_duration.labels(provider=provider_name).observe(duration / 1000)
                 span.set_attribute("gen_ai.response.duration_ms", duration)
 
                 if res.ok:
@@ -84,13 +82,13 @@ Return ONLY valid JSON. No markdown code blocks, no preamble.
                     otel_logger.info("Successfully generated Gemini AI report", extra={"execution_time_ms": round(duration, 2), "provider": provider_name})
                     return AIReportSchema(**parsed)
                 else:
-                    llm_failures_total.add(1, {"provider": provider_name, "error.type": f"http_{res.status_code}"})
+                    llm_failures_total.labels(provider=provider_name, error_type=f"http_{res.status_code}").inc()
                     span.set_status(Status(StatusCode.ERROR, f"HTTP {res.status_code}"))
                     otel_logger.error(f"Gemini API returned status {res.status_code}", extra={"provider": provider_name, "error_details": res.text})
             except Exception as e:
                 duration = elapsed_ms(start_time)
-                llm_failures_total.add(1, {"provider": provider_name, "error.type": type(e).__name__})
-                llm_latency.record(duration, {"provider": provider_name, "outcome": "error"})
+                llm_failures_total.labels(provider=provider_name, error_type=type(e).__name__).inc()
+                llm_duration.labels(provider=provider_name).observe(duration / 1000)
                 mark_error(span, e)
                 otel_logger.exception("Gemini LLM request failed", extra={"execution_time_ms": round(duration, 2), "provider": provider_name, "error_details": str(e)})
 

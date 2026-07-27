@@ -4,12 +4,11 @@ from typing import Optional, Dict, Any
 from app.config import settings
 from app.observability.tracer import (
     tracer, 
-    cache_operations_total,
-    cache_latency,
     elapsed_ms,
     mark_error,
     otel_logger
 )
+from app.observability.prometheus_metrics import cache_operations_total, cache_duration
 
 try:
     import redis
@@ -46,15 +45,14 @@ class CacheService:
                     result = entry["data"]
 
             duration = elapsed_ms(start_time)
-            metric_attributes = {"cache.system": "redis" if _redis_available else "memory", "cache.operation": "get"}
-            cache_latency.record(duration, metric_attributes)
+            cache_duration.labels(operation="get").observe(duration / 1000)
 
             if result:
-                cache_operations_total.add(1, {**metric_attributes, "cache.result": "hit"})
+                cache_operations_total.labels(operation="get", status="hit").inc()
                 span.set_attribute("cache.hit", True)
                 otel_logger.info("Cache hit", extra={"execution_time_ms": round(duration, 2), "channel": key})
             else:
-                cache_operations_total.add(1, {**metric_attributes, "cache.result": "miss"})
+                cache_operations_total.labels(operation="get", status="miss").inc()
                 span.set_attribute("cache.hit", False)
                 otel_logger.info("Cache miss", extra={"execution_time_ms": round(duration, 2), "channel": key})
 

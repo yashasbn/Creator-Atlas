@@ -3,7 +3,8 @@ import time
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from app.config import settings
-from app.observability.tracer import elapsed_ms, mark_error, tracer, youtube_api_duration, youtube_api_failures
+from app.observability.tracer import elapsed_ms, mark_error, tracer
+from app.observability.prometheus_metrics import youtube_api_duration, youtube_api_failures
 
 class YouTubeService:
     def __init__(self, api_key: str = None):
@@ -20,12 +21,12 @@ class YouTubeService:
             span.set_attribute("youtube.operation", operation)
             try:
                 result = request.execute()
-                youtube_api_duration.record(elapsed_ms(started), {"youtube.operation": operation, "outcome": "success"})
+                youtube_api_duration.labels(operation=operation).observe(elapsed_ms(started) / 1000)
                 return result
             except Exception as error:
                 mark_error(span, error)
-                youtube_api_failures.add(1, {"youtube.operation": operation, "error.type": type(error).__name__})
-                youtube_api_duration.record(elapsed_ms(started), {"youtube.operation": operation, "outcome": "error"})
+                youtube_api_failures.labels(operation=operation, error_type=type(error).__name__).inc()
+                youtube_api_duration.labels(operation=operation).observe(elapsed_ms(started) / 1000)
                 raise
 
     def resolve_channel_id(self, channel_name: str) -> str:
