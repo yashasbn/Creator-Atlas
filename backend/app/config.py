@@ -13,11 +13,8 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str = "llama3"
     REDIS_URL: str = "redis://localhost:6379/0"
     CACHE_TTL_SECONDS: int = 86400
-    DATABASE_URL: str = "sqlite:///./creator_atlas.db"
-    OTEL_EXPORTER_OTLP_ENDPOINT: str = "localhost:4317"
-    OTEL_EXPORTER_OTLP_INSECURE: bool = True
-    OTEL_SERVICE_NAME: str = "creator-atlas-backend"
-    REMOTE_SIGNOZ_ENDPOINT: str = ""
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/creator_atlas"
+    PROMETHEUS_PORT: int = 9090
 
     class Config:
         env_file = ".env"
