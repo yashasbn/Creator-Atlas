@@ -1,7 +1,7 @@
 services:
   backend:
     build: { context: ./backend, dockerfile: Dockerfile }
-    ports: ["8081:8000"]
+    ports: [ "8081:8000" ]
     environment:
       YOUTUBE_API_KEY: ${YOUTUBE_API_KEY}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
@@ -9,8 +9,6 @@ services:
       REDIS_URL: redis://redis:6379/0
       DATABASE_URL: postgresql://atlas_user:atlas_pass@postgres:5432/creator_atlas
       ENVIRONMENT: ${ENVIRONMENT:-development}
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
-      OTEL_SERVICE_NAME: creator-atlas-backend
     depends_on:
       redis: { condition: service_healthy }
       postgres: { condition: service_healthy }
@@ -22,36 +20,48 @@ services:
     image: node:22-alpine
     working_dir: /app
     command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
-    volumes: ["./UI/youtube-frontend:/app"]
-    ports: ["5173:5173"]
-    depends_on: [backend]
+    volumes: [ "./UI/youtube-frontend:/app" ]
+    ports: [ "5173:5173" ]
+    depends_on: [ backend ]
 
   redis:
     image: redis:7-alpine
-    ports: ["6379:6379"]
-    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 10s, timeout: 3s, retries: 5 }
+    ports: [ "6379:6379" ]
+    healthcheck: { test: [ "CMD", "redis-cli", "ping" ], interval: 10s, timeout: 3s, retries: 5 }
 
   postgres:
     image: postgres:16-alpine
     environment: { POSTGRES_USER: atlas_user, POSTGRES_PASSWORD: atlas_pass, POSTGRES_DB: creator_atlas }
-    ports: ["5432:5432"]
-    volumes: ["postgres_data:/var/lib/postgresql/data"]
-    healthcheck: { test: ["CMD-SHELL", "pg_isready -U atlas_user -d creator_atlas"], interval: 10s, timeout: 5s, retries: 5 }
+    ports: [ "5432:5432" ]
+    volumes: [ "postgres_data:/var/lib/postgresql/data" ]
+    healthcheck: { test: [ "CMD-SHELL", "pg_isready -U atlas_user -d creator_atlas" ], interval: 10s, timeout: 5s, retries: 5 }
 
-  # OTel Collector - receives telemetry from app and forwards to SigNoz
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.139.0
-    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+  prometheus:
+    image: prom/prometheus:latest
+    ports: [ "9090:9090" ]
     volumes:
-      - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
-    # ports:
-    #   - "4317:4317"  # OTLP gRPC receiver
-    #   - "4318:4318"  # OTLP HTTP receiver
-    #   - "13133:13133" # Health check
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - default
+
+  grafana:
+    image: grafana/grafana:latest
+    ports: [ "3000:3000" ]
     environment:
-      - SIGNOZ_ENDPOINT=${SIGNOZ_ENDPOINT:-host.docker.internal:4317}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
     networks:
       - default
 
@@ -60,3 +70,5 @@ networks:
 
 volumes:
   postgres_data:
+  prometheus_data:
+  grafana_data:
