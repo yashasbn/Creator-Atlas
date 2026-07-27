@@ -1,0 +1,186 @@
+{
+  "dashboard": {
+    "title": "Creator Atlas Metrics",
+    "uid": "creator-atlas-dashboard",
+    "panels": [
+      {
+        "title": "HTTP Requests",
+        "targets": [
+          {
+            "expr": "rate(creator_atlas_http_requests_total[5m])",
+            "legendFormat": "{{method}} {{endpoint}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 }
+      },
+      {
+        "title": "HTTP Request Duration",
+        "targets": [
+          {
+            "expr": "rate(creator_atlas_http_request_duration_seconds_sum[5m]) / rate(creator_atlas_http_request_duration_seconds_count[5m])",
+            "legendFormat": "{{method}} {{endpoint}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 }
+      },
+      {
+        "title": "HTTP Errors",
+        "targets": [
+          {
+            "expr": "rate(creator_atlas_http_errors_total[5m])",
+            "legendFormat": "{{method}} {{endpoint}} - {{error_type}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 }
+      },
+      {
+        "title": "Cache Operations",
+        "targets": [
+          {
+            "expr": "rate(creator_atlas_cache_operations_total[5m])",
+            "legendFormat": "{{operation}} - {{status}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 }
+      },
+      {
+        "title": "Cache Duration",
+        "targets": [
+          {
+            "expr": "rate(creator_atlas_cache_duration_seconds_sum[5m]) / rate(creator_atlas_cache_duration_seconds_count[5m])",
+            "legendFormat": "{{operation}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 }
+      },
+      {
+        "title": "YouTube API Requests",
+        "targets": [
+          {
+            "expr": "rate(creator_atlas_youtube_api_requests_total[5m])",
+            "legendFormat": "{{operation}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 }
+      },
+      {
+        "title": "YouTube API Duration",
+        "targets": [
+          {
+            "expr": "rate(creator_atlas_youtube_api_duration_seconds_sum[5m]) / rate(creator_atlas_youtube_api_duration_seconds_count[5m])",
+            "legendFormat": "{{operation}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 }
+      },
+      {
+        "title": "YouTube API Failures",
+        "targets": [
+          {
+            "expr": "rate(creator_atlas_youtube_api_failures_total[5m])",
+            "legendFormat": "{{operation}} - {{error_type}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 }
+      },
+      {
+        "title": "LLM Requests",
+        "targets": [
+          {
+            "expr": "rate(creator_atlas_llm_requests_total[5m])",
+            "legendFormat": "{{provider}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 32, "w": 12, "h": 8 }
+      },
+      {
+        "title": "LLM Duration",
+        "targets": [
+          {
+            "expr": "rate(creator_atlas_llm_duration_seconds_sum[5m]) / rate(creator_atlas_llm_duration_seconds_count[5m])",
+            "legendFormat": "{{provider}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 32, "w": 12, "h": 8 }
+      },
+      {
+        "title": "LLM Failures",
+        "targets": [
+          {
+            "expr": "rate(creator_atlas_llm_failures_total[5m])",
+            "legendFormat": "{{provider}} - {{error_type}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 40, "w": 12, "h": 8 }
+      },
+      {
+        "title": "Analytics Duration",
+        "targets": [
+          {
+            "expr": "rate(creator_atlas_analytics_duration_seconds_sum[5m]) / rate(creator_atlas_analytics_duration_seconds_count[5m])",
+            "legendFormat": "Analytics"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 40, "w": 12, "h": 8 }
+      },
+      {
+        "title": "Database Operations",
+        "targets": [
+          {
+            "expr": "rate(creator_atlas_database_operations_total[5m])",
+            "legendFormat": "{{operation}} - {{table}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 48, "w": 12, "h": 8 }
+      },
+      {
+        "title": "Database Duration",
+        "targets": [
+          {
+            "expr": "rate(creator_atlas_database_duration_seconds_sum[5m]) / rate(creator_atlas_database_duration_seconds_count[5m])",
+            "legendFormat": "{{operation}} - {{table}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 48, "w": 12, "h": 8 }
+      },
+      {
+        "title": "Channel Analyses",
+        "targets": [
+          {
+            "expr": "rate(creator_atlas_channel_analyses_total[5m])",
+            "legendFormat": "{{ai_provider}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 56, "w": 12, "h": 8 }
+      },
+      {
+        "title": "Channel Analysis Duration",
+        "targets": [
+          {
+            "expr": "rate(creator_atlas_channel_analysis_duration_seconds_sum[5m]) / rate(creator_atlas_channel_analysis_duration_seconds_count[5m])",
+            "legendFormat": "{{ai_provider}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 56, "w": 12, "h": 8 }
+      }
+    ],
+    "refresh": "5s",
+    "time": { "from": "now-1h", "to": "now" }
+  }
+}
